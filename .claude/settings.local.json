@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/Ruslan/Проекты/вкр_жека\" && pip install python-sat pytest 2>&1 | tail -5)",
+      "Bash(cd \"C:/Users/Ruslan/Проекты/вкр_жека\" && python -m pytest tests/ -v 2>&1)",
+      "Bash(cd \"C:/Users/Ruslan/Проекты/вкр_жека\" && pip install fastapi uvicorn 2>&1 | tail -3)",
+      "Bash(sleep 3 && curl -s http://localhost:8000/ 2>&1)",
+      "Bash(cd \"C:/Users/Ruslan/Проекты/вкр_жека\" && python -m uvicorn backend.main:app --reload --port 8000)",
+      "Bash(cd \"C:/Users/Ruslan/Проекты/вкр_жека\" && npm create vite@latest frontend -- --template react-ts 2>&1)",
+      "Bash(cd \"C:/Users/Ruslan/Проекты/вкр_жека/frontend\" && npm install 2>&1 | tail -5)",
+      "Bash(cd \"C:/Users/Ruslan/Проекты/вкр_жека/frontend\" && npm install tailwindcss @tailwindcss/vite axios recharts react-router-dom lucide-react 2>&1 | tail -5)",
+      "Bash(cd \"C:/Users/Ruslan/Проекты/вкр_жека/frontend\" && npm run dev)",
+      "Bash(sleep 5 && curl -s http://localhost:8000/api/health && echo \"\" && curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)"
+    ]
+  }
+}
