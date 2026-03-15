@@ -7,6 +7,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
+
 from src.differential.propagation import (
     modadd_xor_differential_prob,
     ch_differential_prob_bit,
