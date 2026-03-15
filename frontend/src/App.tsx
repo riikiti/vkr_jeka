@@ -5,6 +5,7 @@ import HashPage from './pages/HashPage';
 import DifferentialPage from './pages/DifferentialPage';
 import SATPage from './pages/SATPage';
 import ExperimentPage from './pages/ExperimentPage';
+import BatchPage from './pages/BatchPage';
 import SettingsPage from './pages/SettingsPage';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
             <Route path="/differential" element={<DifferentialPage />} />
             <Route path="/sat" element={<SATPage />} />
             <Route path="/experiment" element={<ExperimentPage />} />
+            <Route path="/batch" element={<BatchPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>

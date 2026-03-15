@@ -17,6 +17,8 @@ from src.differential.propagation import (
 from src.differential.probability import estimate_characteristic_probability
 from src.hash_functions.sha256 import SHA256Reduced
 from src.hash_functions.sha1 import SHA1Reduced
+from src.hash_functions.md5 import MD5Reduced
+from src.hash_functions.md4 import MD4Reduced
 
 router = APIRouter()
 
@@ -70,12 +72,16 @@ async def validate_characteristic(req: ValidateRequest):
     except ValueError:
         raise HTTPException(400, "Invalid hex in message_diff")
 
-    if req.hash_function == "sha256":
-        hash_cls = SHA256Reduced
-    elif req.hash_function == "sha1":
-        hash_cls = SHA1Reduced
-    else:
-        raise HTTPException(400, f"Unknown hash function: {req.hash_function}")
+    hash_map = {
+        "sha256": SHA256Reduced,
+        "sha1": SHA1Reduced,
+        "md5": MD5Reduced,
+        "md4": MD4Reduced,
+    }
+    hash_cls = hash_map.get(req.hash_function)
+    if hash_cls is None:
+        raise HTTPException(400, f"Unknown hash function: {req.hash_function}. "
+                            f"Available: {', '.join(hash_map)}")
 
     result = estimate_characteristic_probability(
         hash_cls, req.num_rounds, msg_diff,

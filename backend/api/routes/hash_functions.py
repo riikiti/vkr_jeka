@@ -9,12 +9,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from src.hash_functions.sha256 import SHA256Reduced
 from src.hash_functions.sha1 import SHA1Reduced
+from src.hash_functions.md5 import MD5Reduced
+from src.hash_functions.md4 import MD4Reduced
 
 router = APIRouter()
 
 HASH_FUNCTIONS = {
     "sha256": {"name": "SHA-256", "max_rounds": 64, "hash_size": 256},
     "sha1": {"name": "SHA-1", "max_rounds": 80, "hash_size": 160},
+    "md5": {"name": "MD5", "max_rounds": 64, "hash_size": 128},
+    "md4": {"name": "MD4", "max_rounds": 48, "hash_size": 128},
 }
 
 
@@ -81,13 +85,17 @@ async def compare_hashes(req: CompareRequest):
 
 
 def _get_hash_func(name: str, num_rounds: int):
-    if name == "sha256":
-        if num_rounds > 64:
-            raise HTTPException(400, "SHA-256 max rounds is 64")
-        return SHA256Reduced(num_rounds)
-    elif name == "sha1":
-        if num_rounds > 80:
-            raise HTTPException(400, "SHA-1 max rounds is 80")
-        return SHA1Reduced(num_rounds)
-    else:
-        raise HTTPException(400, f"Unknown hash function: {name}")
+    info = HASH_FUNCTIONS.get(name)
+    if not info:
+        raise HTTPException(400, f"Unknown hash function: {name}. "
+                            f"Available: {', '.join(HASH_FUNCTIONS)}")
+    if num_rounds > info["max_rounds"]:
+        raise HTTPException(400, f"{info['name']} max rounds is {info['max_rounds']}")
+
+    constructors = {
+        "sha256": SHA256Reduced,
+        "sha1": SHA1Reduced,
+        "md5": MD5Reduced,
+        "md4": MD4Reduced,
+    }
+    return constructors[name](num_rounds)

@@ -139,28 +139,52 @@ class SHA256Encoder:
 
 
 class CollisionEncoder:
-    """Encodes a collision-finding SAT problem for SHA-256."""
+    """Encodes a collision-finding SAT problem for any supported hash function."""
 
-    def __init__(self, num_rounds: int):
+    # Maps hash function name to (EncoderClass, num_state_words, max_rounds)
+    HASH_ENCODERS = {
+        "sha256": (SHA256Encoder, 8, 64),
+    }
+
+    def __init__(self, num_rounds: int, hash_function: str = "sha256"):
         self.num_rounds = num_rounds
+        self.hash_function = hash_function.lower()
         self.builder = CNFBuilder()
+
+    @classmethod
+    def _get_encoder_info(cls, name: str):
+        """Get encoder class and metadata; imports lazily to avoid circular deps."""
+        name = name.lower()
+        if name == "sha256":
+            return SHA256Encoder, 8, 64
+        elif name == "md5":
+            from .md5_encoder import MD5Encoder
+            return MD5Encoder, 4, 64
+        elif name == "md4":
+            from .md4_encoder import MD4Encoder
+            return MD4Encoder, 4, 48
+        else:
+            raise ValueError(f"Unsupported hash function: {name}. "
+                             f"Supported: sha256, md5, md4")
 
     def encode(self) -> CNFBuilder:
         """Build CNF for finding M != M' such that H(M) = H(M').
 
         Creates two copies of the hash function and constrains output equality.
         """
+        EncoderClass, num_state_words, max_rounds = self._get_encoder_info(self.hash_function)
+        rounds = min(self.num_rounds, max_rounds)
+
         # First copy
-        enc1 = SHA256Encoder(self.num_rounds)
+        enc1 = EncoderClass(rounds)
         enc1.builder = self.builder
         enc1.encode(fix_iv=True)
 
-        # Save first copy's message and output
         msg1 = enc1.message_vars
         out1 = enc1.output_state_vars
 
         # Second copy (shares the same builder)
-        enc2 = SHA256Encoder(self.num_rounds)
+        enc2 = EncoderClass(rounds)
         enc2.builder = self.builder
         enc2.encode(fix_iv=True)
 
@@ -168,7 +192,7 @@ class CollisionEncoder:
         out2 = enc2.output_state_vars
 
         # Constrain: output states are equal
-        for word_idx in range(8):
+        for word_idx in range(num_state_words):
             for bit in range(32):
                 encode_equal(self.builder, out1[word_idx][bit], out2[word_idx][bit])
 
@@ -177,7 +201,6 @@ class CollisionEncoder:
         for w in range(16):
             for bit in range(32):
                 d = self.builder.var_mgr.new_var(f"msg_diff_{w}_{bit}")
-                # d = M1[w][bit] XOR M2[w][bit]
                 from .bit_constraints import encode_xor
                 encode_xor(self.builder, msg1[w][bit], msg2[w][bit], d)
                 diff_vars.append(d)

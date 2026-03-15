@@ -5,9 +5,32 @@ from __future__ import annotations
 import random
 from ..hash_functions.sha256 import SHA256Reduced
 from ..hash_functions.sha1 import SHA1Reduced
+from ..hash_functions.md5 import MD5Reduced
+from ..hash_functions.md4 import MD4Reduced
 from ..utils.bit_operations import xor_difference
 
 MASK32 = 0xFFFFFFFF
+
+# IV and state size for each hash family
+_HASH_IV = {
+    SHA256Reduced: (
+        [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+         0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19],
+        8,
+    ),
+    SHA1Reduced: (
+        [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0],
+        5,
+    ),
+    MD5Reduced: (
+        [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476],
+        4,
+    ),
+    MD4Reduced: (
+        [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476],
+        4,
+    ),
+}
 
 
 def estimate_characteristic_probability(
@@ -21,7 +44,7 @@ def estimate_characteristic_probability(
     leads to zero output difference (collision) for a reduced-round hash.
 
     Args:
-        hash_cls: Hash class (SHA256Reduced or SHA1Reduced).
+        hash_cls: Hash class (SHA256Reduced, SHA1Reduced, MD5Reduced, MD4Reduced).
         num_rounds: Number of rounds.
         message_diff: List of 16 XOR differences for message words.
         num_samples: Number of random message pairs to test.
@@ -35,15 +58,10 @@ def estimate_characteristic_probability(
 
     h = hash_cls(num_rounds=num_rounds)
 
-    if isinstance(h, SHA256Reduced):
-        iv = list(SHA256Reduced.__init__.__module__ and [
-            0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-            0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
-        ])
-        state_words = 8
-    else:
-        iv = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0]
-        state_words = 5
+    iv_info = _HASH_IV.get(hash_cls)
+    if iv_info is None:
+        raise ValueError(f"Unsupported hash class: {hash_cls}")
+    iv, state_words = list(iv_info[0]), iv_info[1]
 
     collisions = 0
     partial_matches = [0] * state_words
@@ -92,11 +110,10 @@ def estimate_round_differential_probability(
 
     h = hash_cls(num_rounds=num_rounds)
 
-    if isinstance(h, SHA256Reduced):
-        iv = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-              0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
-    else:
-        iv = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0]
+    iv_info = _HASH_IV.get(hash_cls)
+    if iv_info is None:
+        raise ValueError(f"Unsupported hash class: {hash_cls}")
+    iv = list(iv_info[0])
 
     state_size = len(iv)
     round_stats = [{"zero_diff_count": [0] * state_size} for _ in range(num_rounds + 1)]
