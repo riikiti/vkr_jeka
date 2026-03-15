@@ -79,7 +79,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Статистика</h2>
           <InfoModal title={dashboardStats.title} size="sm">{dashboardStats.content}</InfoModal>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           title="Статус бэкенда"
           value={health === 'healthy' ? 'работает' : health}
@@ -100,7 +100,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Быстрые действия</h2>
           <InfoModal title={dashboardActions.title} size="sm">{dashboardActions.content}</InfoModal>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <ActionCard
             title="Тест хэш-функции"
             desc="Вычислить и сравнить хэши"
@@ -126,7 +126,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Графики</h2>
           <InfoModal title={dashboardCharts.title} size="sm">{dashboardCharts.content}</InfoModal>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
 
           {/* Pie: распределение по статусам */}
           {statusData.length > 0 && (
@@ -198,7 +198,8 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold">Последние эксперименты</h2>
             <InfoModal title={dashboardTable.title} size="sm">{dashboardTable.content}</InfoModal>
           </div>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="text-slate-400 border-b border-slate-700">
                 <th className="text-left pb-2">ID</th>
@@ -222,6 +223,7 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

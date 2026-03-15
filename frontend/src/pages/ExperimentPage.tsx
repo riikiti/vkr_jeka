@@ -225,7 +225,7 @@ export default function ExperimentPage() {
           <InfoModal title={expConfig.title} size="lg">{expConfig.content}</InfoModal>
         </div>
         {/* Строка 1: хэш-функция и раунды */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <div className="min-w-0">
             <label className="block text-sm text-slate-400 mb-1 truncate">Хэш-функция</label>
             <select
@@ -283,7 +283,7 @@ export default function ExperimentPage() {
         </div>
 
         {/* Строка 2: параметры решателя */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <div className="min-w-0">
             <label className="block text-sm text-slate-400 mb-1 truncate">SAT-решатель</label>
             <select
@@ -414,7 +414,7 @@ export default function ExperimentPage() {
               <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
                 <h3 className="text-sm font-semibold text-slate-300 mb-3">1. Параметры эксперимента</h3>
                 <p className="text-xs text-slate-500 mb-3">С какими настройками была запущена атака.</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <ParamTag label="Хэш-функция" value={hashLabel} />
                   <ParamTag label="Раунды" value={`${configRounds} из ${HASH_INFO[configHashFunc]?.maxRounds ?? '?'}`} />
                   <ParamTag label="Метод" value={METHOD_LABELS[configMethod] ?? configMethod} />
@@ -467,7 +467,7 @@ export default function ExperimentPage() {
               {/* ── 3. Итог ── */}
               <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
                 <h3 className="text-sm font-semibold text-slate-300 mb-3">3. Итог</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                   <MetricCard
                     title="Коллизия найдена"
                     value={results.success ? 'ДА' : 'НЕТ'}
@@ -596,7 +596,7 @@ export default function ExperimentPage() {
               {(timeData.length > 0 || solverChartData.length > 0) && (
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 space-y-4">
                   <h3 className="text-sm font-semibold text-slate-300 mb-1">5. Диаграммы</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     {/* Donut: разбивка времени */}
                     {timeData.length > 0 && (
                       <div className="bg-slate-900 rounded-xl p-4 border border-slate-700">
@@ -686,7 +686,7 @@ export default function ExperimentPage() {
                     </p>
 
                     {/* Messages side by side */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                       <MessageDisplay
                         words={m1}
                         label="Сообщение M1 (16 слов × 32 бита = 512 бит)"
@@ -754,7 +754,7 @@ export default function ExperimentPage() {
                     )}
 
                     {/* Timing breakdown */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                       <div className="bg-slate-950 rounded-lg p-2 border border-slate-800">
                         <p className="text-slate-500">Общее время</p>
                         <p className="text-white font-mono font-semibold">{totalTime.toFixed(3)} с</p>
@@ -784,7 +784,7 @@ export default function ExperimentPage() {
                         <p className="text-slate-500 mb-2">
                           Внутренние метрики CDCL-решателя для последней (успешной) попытки.
                         </p>
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
                           {[
                             { label: 'Результат', value: solverStats.result, hint: 'SAT = решение найдено' },
                             { label: 'Конфликты', value: (solverStats.num_conflicts ?? 0).toLocaleString(), hint: 'Тупики в поиске' },

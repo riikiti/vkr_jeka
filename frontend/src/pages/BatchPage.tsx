@@ -7,7 +7,7 @@ import MessageDisplay from '../components/MessageDisplay';
 import ExportButtons from '../components/ExportButtons';
 import { batchGrid, batchDiffs, batchProgress } from '../data/infoContent';
 
-const API = 'http://localhost:8000/api/experiments';
+const API = '/api/experiments';
 
 interface BatchStatus {
   id: string;
@@ -214,7 +214,7 @@ function CollisionDetails({ results, hashFunction }: { results: ExperimentResult
     <div className="space-y-3 text-xs">
       {/* Messages */}
       {m1_words && m2_words && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <MessageDisplay
             words={m1_words}
             label="Сообщение M1 (16 слов)"
@@ -280,7 +280,7 @@ function CollisionDetails({ results, hashFunction }: { results: ExperimentResult
       )}
 
       {/* Timing breakdown */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
         <div className="bg-slate-950 rounded-lg p-2 border border-slate-800">
           <p className="text-slate-500">Общее время</p>
           <p className="text-white font-mono font-semibold">{results.total_time.toFixed(3)}с</p>
@@ -307,7 +307,7 @@ function CollisionDetails({ results, hashFunction }: { results: ExperimentResult
       {solver_stats && (
         <div>
           <p className="text-slate-400 mb-1 font-semibold">Статистика решателя</p>
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
             {[
               { label: 'Результат', value: solver_stats.result },
               { label: 'Конфликты', value: solver_stats.num_conflicts.toLocaleString() },
@@ -514,7 +514,7 @@ export default function BatchPage() {
           Вводите значения через запятую. Будет создан полный перебор всех комбинаций.
         </p>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate" title={`Хэш-функция (${hashFuncList.length})`}>
               Хэш-функция
@@ -572,7 +572,7 @@ export default function BatchPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate">Метод</label>
             <input
@@ -778,7 +778,7 @@ export default function BatchPage() {
           </div>
 
           {/* Stats cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {[
               { label: 'Всего', value: batch.total, color: 'text-white' },
               { label: 'В очереди', value: batch.pending, color: 'text-slate-400' },
@@ -795,7 +795,7 @@ export default function BatchPage() {
 
           {/* Summary */}
           {batch.summary && batch.completed > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-purple-900/20 rounded-lg p-3 border border-purple-500/30">
                 <p className="text-xs text-slate-400">Коллизий найдено</p>
                 <p className="text-2xl font-bold text-purple-400 font-mono">{batch.summary.success_count}</p>
@@ -855,7 +855,7 @@ export default function BatchPage() {
               </div>
 
               <div className="overflow-x-auto rounded-lg border border-slate-700">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[700px]">
                   <thead className="bg-slate-900">
                     <tr className="text-slate-400 text-xs">
                       <th className="text-left px-3 py-2">ID</th>
@@ -955,7 +955,7 @@ export default function BatchPage() {
                           Коллизия не найдена. Проверено характеристик: {exp.results.characteristics_tried}.
                         </p>
                         {/* Timing */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
                           <div className="bg-slate-950 rounded-lg p-2 border border-slate-800">
                             <p className="text-slate-500">Общее время</p>
                             <p className="text-white font-mono font-semibold">{exp.results.total_time.toFixed(3)}с</p>

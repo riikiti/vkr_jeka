@@ -107,7 +107,7 @@ export default function SATPage() {
             <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Статистика CNF</h2>
             <InfoModal title={satStats.title} size="sm">{satStats.content}</InfoModal>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
               <p className="text-xs text-slate-400 uppercase">Переменные</p>
               <p className="text-3xl font-bold text-cyan-400 font-mono">

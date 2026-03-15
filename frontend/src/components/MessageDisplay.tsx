@@ -164,7 +164,7 @@ export default function MessageDisplay({ words, label, color, diffWords, hashFun
                   <span className="text-slate-600 w-10 shrink-0 select-none">
                     {(li * 16).toString(16).padStart(3, '0')}:
                   </span>
-                  <span className="w-[24.5ch] md:w-auto">
+                  <span className="min-w-0 break-all sm:break-normal">
                     {line.map((b, bi) => {
                       const idx = byteIdx++;
                       const isDiff = diffBytes ? diffBytes[idx] : false;

@@ -86,7 +86,7 @@ export default function HashPage() {
           <h2 className="text-lg font-semibold text-slate-200">Параметры</h2>
           <InfoModal title={hashSettings.title}>{hashSettings.content}</InfoModal>
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm text-slate-400 mb-1">Хэш-функция</label>
             <select
@@ -241,7 +241,7 @@ export default function HashPage() {
 
           {compareResult && (
             <div className="mt-4 bg-slate-900 rounded-lg p-4 border border-slate-600 space-y-2">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-slate-400">Хэш 1</p>
                   <p className="font-mono text-sm text-green-400 break-all">{compareResult.hash1_hex}</p>

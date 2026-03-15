@@ -11,7 +11,7 @@ export default function SettingsPage() {
           <h2 className="text-lg font-semibold text-slate-200">Системная информация</h2>
           <InfoModal title={settingsSystem.title} size="sm">{settingsSystem.content}</InfoModal>
         </div>
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-slate-400">URL бэкенда</p>
             <p className="text-white font-mono">http://localhost:8000</p>
@@ -65,7 +65,7 @@ export default function SettingsPage() {
           <h2 className="text-lg font-semibold text-slate-200">Поддерживаемые хэш-функции</h2>
           <InfoModal title={settingsHashFunctions.title}>{settingsHashFunctions.content}</InfoModal>
         </div>
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           {[
             { name: 'SHA-256', desc: '64 раунда, 256-бит выход, 32-битные слова' },
             { name: 'SHA-1',   desc: '80 раундов, 160-бит выход, 32-битные слова' },
