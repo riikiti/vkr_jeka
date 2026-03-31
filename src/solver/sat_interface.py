@@ -11,6 +11,7 @@ class SATResult(Enum):
     SAT = "SATISFIABLE"
     UNSAT = "UNSATISFIABLE"
     TIMEOUT = "TIMEOUT"
+    CANCELLED = "CANCELLED"
     UNKNOWN = "UNKNOWN"
 
 

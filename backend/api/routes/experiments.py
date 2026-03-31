@@ -116,6 +116,13 @@ def _build_response(result, hash_func_name: str, config: dict) -> dict:
                 "solve_time": round(a.solve_time, 3),
                 "encoding_time": round(a.encoding_time, 3),
                 "hamming_weight": sum(bin(w & 0xFFFFFFFF).count("1") for w in a.diff),
+                "num_vars": getattr(a, "num_vars", 0),
+                "num_clauses": getattr(a, "num_clauses", 0),
+                "num_conflicts": getattr(a, "num_conflicts", 0),
+                "num_decisions": getattr(a, "num_decisions", 0),
+                "num_propagations": getattr(a, "num_propagations", 0),
+                "num_restarts": getattr(a, "num_restarts", 0),
+                "num_learnt_clauses": getattr(a, "num_learnt_clauses", 0),
             }
             for a in getattr(result, "attempts", [])
         ],

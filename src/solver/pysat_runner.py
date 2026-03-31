@@ -71,16 +71,19 @@ class PySATRunner(SATSolverInterface):
 
     def solve(self, cnf_file: str, timeout: int = 3600,
               random_phase_vars: list[int] | None = None,
-              seed: int = 42) -> SolverOutput:
+              seed: int = 42,
+              cancel_event=None) -> SolverOutput:
         from pysat.formula import CNF
         formula = CNF(from_file=cnf_file)
         return self.solve_clauses(formula.clauses, formula.nv, timeout,
-                                  random_phase_vars=random_phase_vars, seed=seed)
+                                  random_phase_vars=random_phase_vars, seed=seed,
+                                  cancel_event=cancel_event)
 
     def solve_clauses(self, clauses: list[list[int]], num_vars: int,
                       timeout: int = 3600,
                       random_phase_vars: list[int] | None = None,
-                      seed: int = 42) -> SolverOutput:
+                      seed: int = 42,
+                      cancel_event=None) -> SolverOutput:
         manager = multiprocessing.Manager()
         result_dict = manager.dict()
 
@@ -93,22 +96,33 @@ class PySATRunner(SATSolverInterface):
 
         start = time.time()
         proc.start()
-        proc.join(timeout=timeout)
+
+        # Poll with short intervals so we can react to cancel_event quickly
+        poll_interval = 0.3  # check every 300ms
+        remaining = timeout
+        while proc.is_alive() and remaining > 0:
+            proc.join(timeout=min(poll_interval, remaining))
+            remaining = timeout - (time.time() - start)
+            if cancel_event is not None and cancel_event.is_set():
+                break
+
         elapsed = time.time() - start
 
         if proc.is_alive():
-            # Timeout — kill the subprocess
+            cancelled = cancel_event is not None and cancel_event.is_set()
+            # Force-kill the subprocess immediately
             proc.terminate()
-            proc.join(timeout=5)
+            proc.join(timeout=3)
             if proc.is_alive():
                 proc.kill()
-                proc.join(timeout=3)
+                proc.join(timeout=2)
 
+            res = SATResult.CANCELLED if cancelled else SATResult.TIMEOUT
             stats = SolverStats(
-                result=SATResult.TIMEOUT,
+                result=res,
                 solve_time=elapsed,
             )
-            return SolverOutput(result=SATResult.TIMEOUT, assignment=None, stats=stats)
+            return SolverOutput(result=res, assignment=None, stats=stats)
 
         # Process finished — read results
         if "sat" not in result_dict:

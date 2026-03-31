@@ -145,10 +145,14 @@ def iterative_attack(
         os.close(fd)
         encoder.builder.write_dimacs(cnf_file)
 
+        cnf_vars = encoder.builder.num_vars
+        cnf_clauses = encoder.builder.num_clauses
+
         solve_start = time.time()
         solve_seed = int(time.time() * 1000) ^ chars_tried
         output = solver.solve(cnf_file, timeout=timeout_per_char,
-                              random_phase_vars=msg_var_ids, seed=solve_seed)
+                              random_phase_vars=msg_var_ids, seed=solve_seed,
+                              cancel_event=cancel_event)
         solve_time = time.time() - solve_start
 
         try:
@@ -158,12 +162,19 @@ def iterative_attack(
 
         logger.info(f"Result: {output.result.value} in {solve_time:.2f}s")
 
-        # Track attempt
+        # Track attempt with solver stats
         result.attempts.append(AttemptInfo(
             diff=list(current_diff),
             result=output.result.value,
             solve_time=solve_time,
             encoding_time=enc_time,
+            num_vars=cnf_vars,
+            num_clauses=cnf_clauses,
+            num_conflicts=output.stats.num_conflicts,
+            num_decisions=output.stats.num_decisions,
+            num_propagations=output.stats.num_propagations,
+            num_restarts=output.stats.num_restarts,
+            num_learnt_clauses=output.stats.num_learnt_clauses,
         ))
 
         if output.result == SATResult.SAT:
@@ -180,6 +191,10 @@ def iterative_attack(
             result.characteristics_tried = chars_tried
             result.total_time = time.time() - total_start
             return result
+
+        if output.result == SATResult.CANCELLED:
+            logger.info("Solver cancelled by user")
+            break
 
         # UNSAT or TIMEOUT — mutate and try again
         if output.result == SATResult.UNSAT:

@@ -38,21 +38,30 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const RESULT_STYLE: Record<string, string> = {
+  SATISFIABLE: 'bg-green-500/20 text-green-400',
+  UNSATISFIABLE: 'bg-red-500/20 text-red-400',
+  TIMEOUT: 'bg-yellow-500/20 text-yellow-400',
+  CANCELLED: 'bg-purple-500/20 text-purple-400',
   SAT: 'bg-green-500/20 text-green-400',
   UNSAT: 'bg-red-500/20 text-red-400',
-  TIMEOUT: 'bg-yellow-500/20 text-yellow-400',
 };
 
 const RESULT_LABEL: Record<string, string> = {
+  SATISFIABLE: 'SAT — коллизия найдена',
+  UNSATISFIABLE: 'UNSAT — доказано: невозможно',
+  TIMEOUT: 'TIMEOUT — не успел решить',
+  CANCELLED: 'ОТМЕНЕНО — прервано пользователем',
   SAT: 'SAT — коллизия найдена',
   UNSAT: 'UNSAT — доказано: невозможно',
-  TIMEOUT: 'TIMEOUT — не успел решить',
 };
 
 const RESULT_EXPLANATION: Record<string, string> = {
+  SATISFIABLE: 'Решатель нашёл такие значения M1 и M2, что хэши совпадают при данной разности.',
+  UNSATISFIABLE: 'Решатель математически доказал, что для данной разности коллизия невозможна при данном числе раундов.',
+  TIMEOUT: 'Решатель не смог ни найти коллизию, ни доказать её невозможность за отведённое время.',
+  CANCELLED: 'Решение было прервано пользователем до завершения.',
   SAT: 'Решатель нашёл такие значения M1 и M2, что хэши совпадают при данной разности.',
   UNSAT: 'Решатель математически доказал, что для данной разности коллизия невозможна при данном числе раундов.',
-  TIMEOUT: 'Решатель не смог ни найти коллизию, ни доказать её невозможность за отведённое время.',
 };
 
 export default function ExperimentPage() {
@@ -496,6 +505,13 @@ export default function ExperimentPage() {
                   solve_time: number;
                   encoding_time: number;
                   hamming_weight: number;
+                  num_vars?: number;
+                  num_clauses?: number;
+                  num_conflicts?: number;
+                  num_decisions?: number;
+                  num_propagations?: number;
+                  num_restarts?: number;
+                  num_learnt_clauses?: number;
                 }[] | undefined;
                 if (!attempts || attempts.length === 0) return null;
 
@@ -584,6 +600,59 @@ export default function ExperimentPage() {
                                 <p className="text-xs text-slate-500 mt-1">Все слова нулевые — пустая разность.</p>
                               )}
                             </div>
+
+                            {/* Expandable solver details */}
+                            {(a.num_vars || a.num_conflicts || a.num_decisions) ? (
+                              <details className="mt-2">
+                                <summary className="text-xs text-blue-400 cursor-pointer hover:text-blue-300 select-none">
+                                  Расширенная информация (SAT-решатель)
+                                </summary>
+                                <div className="mt-2 bg-slate-950 rounded p-3 text-xs space-y-2">
+                                  {/* CNF formula stats */}
+                                  <div>
+                                    <p className="text-slate-400 font-semibold mb-1">CNF-формула:</p>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                      <div><span className="text-slate-500">Переменных:</span> <span className="text-slate-200 font-mono">{(a.num_vars ?? 0).toLocaleString()}</span></div>
+                                      <div><span className="text-slate-500">Дизъюнктов:</span> <span className="text-slate-200 font-mono">{(a.num_clauses ?? 0).toLocaleString()}</span></div>
+                                      <div><span className="text-slate-500">Отношение C/V:</span> <span className="text-slate-200 font-mono">{a.num_vars ? (a.num_clauses! / a.num_vars).toFixed(2) : '—'}</span></div>
+                                    </div>
+                                  </div>
+                                  {/* CDCL solver internals */}
+                                  <div>
+                                    <p className="text-slate-400 font-semibold mb-1">Работа CDCL-решателя:</p>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                      <div><span className="text-slate-500">Конфликты:</span> <span className="text-yellow-300 font-mono">{(a.num_conflicts ?? 0).toLocaleString()}</span></div>
+                                      <div><span className="text-slate-500">Решения (decisions):</span> <span className="text-slate-200 font-mono">{(a.num_decisions ?? 0).toLocaleString()}</span></div>
+                                      <div><span className="text-slate-500">Распространения:</span> <span className="text-slate-200 font-mono">{(a.num_propagations ?? 0).toLocaleString()}</span></div>
+                                      <div><span className="text-slate-500">Рестарты:</span> <span className="text-slate-200 font-mono">{(a.num_restarts ?? 0).toLocaleString()}</span></div>
+                                      <div><span className="text-slate-500">Выученные дизъюнкты:</span> <span className="text-slate-200 font-mono">{(a.num_learnt_clauses ?? 0).toLocaleString()}</span></div>
+                                      <div><span className="text-slate-500">Конфликтов/с:</span> <span className="text-slate-200 font-mono">{a.solve_time > 0 ? Math.round((a.num_conflicts ?? 0) / a.solve_time).toLocaleString() : '—'}</span></div>
+                                    </div>
+                                  </div>
+                                  {/* Explanation */}
+                                  <div className="text-slate-500 leading-relaxed border-t border-slate-800 pt-2">
+                                    {a.result === 'SATISFIABLE' && (
+                                      <p>Решатель нашёл набор значений переменных, удовлетворяющий всем {(a.num_clauses ?? 0).toLocaleString()} дизъюнктам.
+                                        В процессе поиска было принято {(a.num_decisions ?? 0).toLocaleString()} решений о значениях переменных,
+                                        обнаружено {(a.num_conflicts ?? 0).toLocaleString()} конфликтов (каждый конфликт порождает новый выученный дизъюнкт),
+                                        и выполнено {(a.num_restarts ?? 0).toLocaleString()} рестартов поиска.</p>
+                                    )}
+                                    {a.result === 'UNSATISFIABLE' && (
+                                      <p>Решатель доказал, что формула невыполнима — коллизия с данной разностью ΔM математически невозможна.
+                                        Доказательство потребовало {(a.num_conflicts ?? 0).toLocaleString()} конфликтов и {(a.num_decisions ?? 0).toLocaleString()} решений.
+                                        {a.num_conflicts && a.num_conflicts < 500 ? ' Малое число конфликтов указывает на быстрое обнаружение противоречия.' : ''}</p>
+                                    )}
+                                    {a.result === 'TIMEOUT' && (
+                                      <p>Решатель не смог ни найти решение, ни доказать невозможность за отведённое время.
+                                        За это время было обработано {(a.num_conflicts ?? 0).toLocaleString()} конфликтов. Это может означать, что задача слишком сложна для данного числа раундов.</p>
+                                    )}
+                                    {a.result === 'CANCELLED' && (
+                                      <p>Решение было прервано пользователем. За время работы было обработано {(a.num_conflicts ?? 0).toLocaleString()} конфликтов.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              </details>
+                            ) : null}
                           </div>
                         );
                       })}

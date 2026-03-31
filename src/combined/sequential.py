@@ -89,9 +89,16 @@ def generate_message_diffs(count: int, seed: int = 42) -> list[list[int]]:
 class AttemptInfo:
     """Info about a single SAT-solving attempt."""
     diff: list[int] = field(default_factory=list)
-    result: str = ""        # "SAT", "UNSAT", "TIMEOUT", "ERROR"
+    result: str = ""        # "SAT", "UNSAT", "TIMEOUT", "CANCELLED", "ERROR"
     solve_time: float = 0.0
     encoding_time: float = 0.0
+    num_vars: int = 0
+    num_clauses: int = 0
+    num_conflicts: int = 0
+    num_decisions: int = 0
+    num_propagations: int = 0
+    num_restarts: int = 0
+    num_learnt_clauses: int = 0
 
 
 @dataclass
@@ -177,10 +184,14 @@ def sequential_attack(
         logger.info(f"CNF: {encoder.builder.num_vars} vars, "
                     f"{encoder.builder.num_clauses} clauses")
 
+        cnf_vars = encoder.builder.num_vars
+        cnf_clauses = encoder.builder.num_clauses
+
         solve_start = time.time()
         solve_seed = int(time.time() * 1000) ^ chars_tried
         output = solver.solve(cnf_file, timeout=timeout_per_char,
-                              random_phase_vars=msg_var_ids, seed=solve_seed)
+                              random_phase_vars=msg_var_ids, seed=solve_seed,
+                              cancel_event=cancel_event)
         solve_time = time.time() - solve_start
 
         # Clean up temp file
@@ -191,16 +202,26 @@ def sequential_attack(
 
         logger.info(f"Result: {output.result.value} in {solve_time:.2f}s")
 
-        # Track attempt
+        # Track attempt with full solver stats
         attempt = AttemptInfo(
             diff=list(diff),
             result=output.result.value,
             solve_time=solve_time,
             encoding_time=enc_time,
+            num_vars=cnf_vars,
+            num_clauses=cnf_clauses,
+            num_conflicts=output.stats.num_conflicts,
+            num_decisions=output.stats.num_decisions,
+            num_propagations=output.stats.num_propagations,
+            num_restarts=output.stats.num_restarts,
+            num_learnt_clauses=output.stats.num_learnt_clauses,
         )
         result.attempts.append(attempt)
 
-        if output.result == SATResult.TIMEOUT:
+        if output.result in (SATResult.TIMEOUT, SATResult.CANCELLED):
+            if output.result == SATResult.CANCELLED:
+                logger.info("Solver cancelled by user")
+                break
             logger.info(f"Solver timed out after {timeout_per_char}s, trying next diff")
             continue
 

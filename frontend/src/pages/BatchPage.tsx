@@ -525,6 +525,7 @@ export default function BatchPage() {
               placeholder="sha256,md5,md4"
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">Допустимые: <span className="text-slate-400">sha256</span>, <span className="text-slate-400">md5</span>, <span className="text-slate-400">md4</span></p>
           </div>
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate" title={`Раунды (${roundsList.length} значений)`}>
@@ -536,6 +537,7 @@ export default function BatchPage() {
               placeholder="4,6,8,10,12"
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">Целые числа. SHA-256: 1–64, MD5: 1–64, MD4: 1–48</p>
           </div>
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate" title={`SAT-решатели (${solversList.length})`}>
@@ -547,6 +549,7 @@ export default function BatchPage() {
               placeholder="cadical153,glucose4,minisat22"
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">Допустимые: <span className="text-slate-400">cadical153</span>, <span className="text-slate-400">glucose4</span>, <span className="text-slate-400">minisat22</span></p>
           </div>
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate" title={`Таймауты (${timeoutsList.length})`}>
@@ -558,10 +561,11 @@ export default function BatchPage() {
               placeholder="30,60,120"
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">Секунды на одну попытку. Рекомендация: 30–120</p>
           </div>
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate" title={`Попыток (${maxCharsList.length})`}>
-              Попыток
+              Попыток на эксперимент
             </label>
             <input
               value={maxChars}
@@ -569,6 +573,7 @@ export default function BatchPage() {
               placeholder="5,10,20"
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">Кол-во разностей ΔM для перебора. Больше = дольше</p>
           </div>
         </div>
 
@@ -581,6 +586,7 @@ export default function BatchPage() {
               placeholder="combined"
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">Допустимые: <span className="text-slate-400">combined</span>, <span className="text-slate-400">pure_sat</span></p>
           </div>
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate">Стратегия</label>
@@ -590,25 +596,28 @@ export default function BatchPage() {
               placeholder="sequential"
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">Допустимые: <span className="text-slate-400">sequential</span>, <span className="text-slate-400">iterative</span>, <span className="text-slate-400">hybrid</span></p>
           </div>
           <div className="min-w-0">
-            <label className="block text-xs text-slate-400 mb-1 truncate">Воркеров</label>
+            <label className="block text-xs text-slate-400 mb-1 truncate">Параллельных воркеров</label>
             <input
               type="number" min={1} max={32} value={maxWorkers}
               onChange={e => setMaxWorkers(Number(e.target.value))}
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">1–32. Больше = быстрее, но больше нагрузка на CPU</p>
           </div>
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate" title="Случайная выборка (пусто = все)">
-              Выборка
+              Выборка из комбинаций
             </label>
             <input
               type="number" min={1} value={sampleSize}
               onChange={e => setSampleSize(e.target.value)}
-              placeholder={`из ${totalCombos}`}
+              placeholder={`все ${totalCombos}`}
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
+            <p className="text-[10px] text-slate-500 mt-1">Пусто = все комбинации. Число = случайная выборка</p>
           </div>
         </div>
 
