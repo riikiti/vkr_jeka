@@ -586,7 +586,7 @@ export default function BatchPage() {
               placeholder="combined"
               className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:border-cyan-500 outline-none"
             />
-            <p className="text-[10px] text-slate-500 mt-1">Допустимые: <span className="text-slate-400">combined</span>, <span className="text-slate-400">pure_sat</span></p>
+            <p className="text-[10px] text-slate-500 mt-1">Допустимые: <span className="text-slate-400">combined</span>, <span className="text-slate-400">pure_sat</span>, <span className="text-slate-400">pure_differential</span></p>
           </div>
           <div className="min-w-0">
             <label className="block text-xs text-slate-400 mb-1 truncate">Стратегия</label>
