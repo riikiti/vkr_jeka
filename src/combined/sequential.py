@@ -125,6 +125,7 @@ def sequential_attack(
     max_characteristics: int = 10,
     hash_function: str = "sha256",
     cancel_event=None,
+    progress_callback=None,
 ) -> AttackResult:
     """Run sequential combined attack on a reduced-round hash function.
 
@@ -164,6 +165,14 @@ def sequential_attack(
         logger.info(f"Trying message diff #{chars_tried} (HW={hw}): "
                     f"[{', '.join(f'0x{d:08x}' for d in diff[:4])}...]")
 
+        if progress_callback:
+            progress_callback({
+                "stage": "encoding",
+                "attempt": chars_tried,
+                "total": min(len(message_diffs), max_characteristics),
+                "message": f"Кодирование CNF для разности #{chars_tried} (HW={hw})",
+            })
+
         # Encode collision problem
         enc_start = time.time()
         encoder = CollisionEncoder(num_rounds, hash_function=hash_function)
@@ -187,6 +196,14 @@ def sequential_attack(
         cnf_vars = encoder.builder.num_vars
         cnf_clauses = encoder.builder.num_clauses
 
+        if progress_callback:
+            progress_callback({
+                "stage": "solving",
+                "attempt": chars_tried,
+                "total": min(len(message_diffs), max_characteristics),
+                "message": f"SAT-решение #{chars_tried}: {cnf_vars} перем., {cnf_clauses} дизъюнктов",
+            })
+
         solve_start = time.time()
         solve_seed = int(time.time() * 1000) ^ chars_tried
         output = solver.solve(cnf_file, timeout=timeout_per_char,
@@ -201,6 +218,15 @@ def sequential_attack(
             pass
 
         logger.info(f"Result: {output.result.value} in {solve_time:.2f}s")
+
+        if progress_callback:
+            progress_callback({
+                "stage": "result",
+                "attempt": chars_tried,
+                "total": min(len(message_diffs), max_characteristics),
+                "message": f"Попытка #{chars_tried}: {output.result.value} за {solve_time:.2f}с",
+                "last_result": output.result.value,
+            })
 
         # Track attempt with full solver stats
         attempt = AttemptInfo(

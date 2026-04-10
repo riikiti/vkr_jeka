@@ -195,7 +195,12 @@ export default function ExperimentPage() {
   const solverStats = results?.solver_stats as Record<string, number> | undefined;
 
   const totalTime = (results?.total_time as number) ?? 0;
-  const solvingTime = (results?.solving_time as number) ?? 0;
+  // solving_time may be 0 when no SAT found — sum from attempts in that case
+  let solvingTime = (results?.solving_time as number) ?? 0;
+  if (solvingTime === 0 && results?.attempts) {
+    const atts = results.attempts as { solve_time?: number }[];
+    solvingTime = atts.reduce((s, a) => s + (a.solve_time ?? 0), 0);
+  }
   const otherTime = Math.max(0, totalTime - solvingTime);
 
   const timeData = totalTime > 0
@@ -205,12 +210,28 @@ export default function ExperimentPage() {
       ].filter(d => d.value > 0)
     : [];
 
-  const solverChartData = solverStats
+  // Aggregate solver stats: prefer solver_stats from successful attempt, otherwise sum from all attempts
+  const aggregatedStats = (() => {
+    if (solverStats) return solverStats;
+    const attempts = results?.attempts as { num_conflicts?: number; num_decisions?: number; num_propagations?: number; num_restarts?: number; num_learnt_clauses?: number }[] | undefined;
+    if (!attempts || attempts.length === 0) return null;
+    const agg = { num_conflicts: 0, num_decisions: 0, num_propagations: 0, num_restarts: 0, num_learnt_clauses: 0 };
+    for (const a of attempts) {
+      agg.num_conflicts += a.num_conflicts ?? 0;
+      agg.num_decisions += a.num_decisions ?? 0;
+      agg.num_propagations += a.num_propagations ?? 0;
+      agg.num_restarts += a.num_restarts ?? 0;
+      agg.num_learnt_clauses += a.num_learnt_clauses ?? 0;
+    }
+    return agg.num_conflicts > 0 || agg.num_decisions > 0 ? agg : null;
+  })();
+
+  const solverChartData = aggregatedStats
     ? [
-        { name: 'Конфликты', value: solverStats.num_conflicts ?? 0 },
-        { name: 'Решения', value: solverStats.num_decisions ?? 0 },
-        { name: 'Распр-ия', value: solverStats.num_propagations ?? 0 },
-        { name: 'Рестарты', value: solverStats.num_restarts ?? 0 },
+        { name: 'Конфликты', value: aggregatedStats.num_conflicts ?? 0 },
+        { name: 'Решения', value: aggregatedStats.num_decisions ?? 0 },
+        { name: 'Распр-ия', value: aggregatedStats.num_propagations ?? 0 },
+        { name: 'Рестарты', value: aggregatedStats.num_restarts ?? 0 },
       ]
     : [];
 
@@ -364,24 +385,53 @@ export default function ExperimentPage() {
           </button>
         </div>
 
-        {loading && (
-          <div className="flex items-center gap-3 text-slate-400">
-            <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-            <span>SAT-решатель работает, это может занять некоторое время...</span>
-            {result?.id && (
-              <button
-                onClick={async () => {
-                  try {
-                    await fetch(`/api/experiments/cancel/${result.id}`, { method: 'POST' });
-                  } catch {}
-                }}
-                className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                Остановить
-              </button>
-            )}
-          </div>
-        )}
+        {loading && (() => {
+          const progress = result?.progress as { stage?: string; attempt?: number; total?: number; message?: string } | undefined;
+          return (
+            <div className="space-y-2">
+              <div className="flex items-center gap-3 text-slate-400">
+                <div className="w-5 h-5 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                <span className="flex-1">
+                  {progress?.message || 'SAT-решатель работает, это может занять некоторое время...'}
+                </span>
+                {result?.id && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await fetch(`/api/experiments/cancel/${result.id}`, { method: 'POST' });
+                      } catch {}
+                    }}
+                    className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-medium transition-colors shrink-0"
+                  >
+                    Остановить
+                  </button>
+                )}
+              </div>
+              {progress?.attempt != null && progress?.total != null && progress.total > 0 && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 bg-slate-700 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${Math.round((progress.attempt / progress.total) * 100)}%`,
+                        backgroundColor: progress.stage === 'solving' ? '#22d3ee' : progress.stage === 'monte_carlo' ? '#a78bfa' : '#60a5fa',
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs text-slate-500 shrink-0 font-mono">
+                    {progress.attempt}/{progress.total}
+                  </span>
+                  <span className="text-xs text-slate-600">
+                    {progress.stage === 'encoding' && 'кодирование'}
+                    {progress.stage === 'solving' && 'решение'}
+                    {progress.stage === 'result' && 'анализ'}
+                    {progress.stage === 'monte_carlo' && 'Монте-Карло'}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ═══════════════════════  РЕЗУЛЬТАТЫ  ═══════════════════════ */}
@@ -629,26 +679,44 @@ export default function ExperimentPage() {
                                       <div><span className="text-slate-500">Конфликтов/с:</span> <span className="text-slate-200 font-mono">{a.solve_time > 0 ? Math.round((a.num_conflicts ?? 0) / a.solve_time).toLocaleString() : '—'}</span></div>
                                     </div>
                                   </div>
-                                  {/* Explanation */}
-                                  <div className="text-slate-500 leading-relaxed border-t border-slate-800 pt-2">
-                                    {a.result === 'SATISFIABLE' && (
-                                      <p>Решатель нашёл набор значений переменных, удовлетворяющий всем {(a.num_clauses ?? 0).toLocaleString()} дизъюнктам.
-                                        В процессе поиска было принято {(a.num_decisions ?? 0).toLocaleString()} решений о значениях переменных,
-                                        обнаружено {(a.num_conflicts ?? 0).toLocaleString()} конфликтов (каждый конфликт порождает новый выученный дизъюнкт),
-                                        и выполнено {(a.num_restarts ?? 0).toLocaleString()} рестартов поиска.</p>
-                                    )}
-                                    {a.result === 'UNSATISFIABLE' && (
-                                      <p>Решатель доказал, что формула невыполнима — коллизия с данной разностью ΔM математически невозможна.
-                                        Доказательство потребовало {(a.num_conflicts ?? 0).toLocaleString()} конфликтов и {(a.num_decisions ?? 0).toLocaleString()} решений.
-                                        {a.num_conflicts && a.num_conflicts < 500 ? ' Малое число конфликтов указывает на быстрое обнаружение противоречия.' : ''}</p>
-                                    )}
-                                    {a.result === 'TIMEOUT' && (
-                                      <p>Решатель не смог ни найти решение, ни доказать невозможность за отведённое время.
-                                        За это время было обработано {(a.num_conflicts ?? 0).toLocaleString()} конфликтов. Это может означать, что задача слишком сложна для данного числа раундов.</p>
-                                    )}
-                                    {a.result === 'CANCELLED' && (
-                                      <p>Решение было прервано пользователем. За время работы было обработано {(a.num_conflicts ?? 0).toLocaleString()} конфликтов.</p>
-                                    )}
+                                  {/* CDCL process explanation */}
+                                  <div className="border-t border-slate-800 pt-2 space-y-2">
+                                    <p className="text-slate-400 font-semibold">Как работал CDCL-решатель:</p>
+                                    <div className="text-slate-500 leading-relaxed space-y-1.5">
+                                      <p>1. <span className="text-slate-400">Формула:</span> {(a.num_vars ?? 0).toLocaleString()} булевых переменных, объединённых в {(a.num_clauses ?? 0).toLocaleString()} дизъюнктов (условий). Каждая переменная — один бит промежуточного состояния хэш-функции.</p>
+                                      <p>2. <span className="text-slate-400">Решения (decisions):</span> решатель выбирал значение переменной (true/false) {(a.num_decisions ?? 0).toLocaleString()} раз. Эвристика VSIDS выбирает переменные, чаще участвующие в конфликтах.</p>
+                                      <p>3. <span className="text-slate-400">Распространение (BCP):</span> после каждого решения автоматически выводились значения зависимых переменных — {(a.num_propagations ?? 0).toLocaleString()} распространений ({a.num_decisions ? Math.round((a.num_propagations ?? 0) / a.num_decisions) : '—'} на решение).</p>
+                                      <p>4. <span className="text-slate-400">Конфликты:</span> обнаружено {(a.num_conflicts ?? 0).toLocaleString()} противоречий. Каждый конфликт анализируется, и из него выводится новый «выученный» дизъюнкт, отсекающий часть пространства поиска.</p>
+                                      <p>5. <span className="text-slate-400">Выученные дизъюнкты:</span> добавлено {(a.num_learnt_clauses ?? 0).toLocaleString()} новых ограничений к исходным {(a.num_clauses ?? 0).toLocaleString()}.</p>
+                                      {(a.num_restarts ?? 0) > 0 && (
+                                        <p>6. <span className="text-slate-400">Рестарты:</span> {(a.num_restarts ?? 0).toLocaleString()} раз решатель сбрасывал текущие присваивания, сохраняя выученные дизъюнкты. Это помогает избежать застревания в тупиковых ветвях.</p>
+                                      )}
+                                    </div>
+                                    <div className={`rounded-lg p-2.5 mt-2 ${
+                                      a.result === 'SATISFIABLE' ? 'bg-green-500/10 border border-green-500/20' :
+                                      a.result === 'UNSATISFIABLE' ? 'bg-red-500/10 border border-red-500/20' :
+                                      a.result === 'TIMEOUT' ? 'bg-yellow-500/10 border border-yellow-500/20' :
+                                      'bg-purple-500/10 border border-purple-500/20'
+                                    }`}>
+                                      <p className="font-semibold text-slate-300 mb-1">
+                                        {a.result === 'SATISFIABLE' && 'Вывод: SAT — коллизия существует'}
+                                        {a.result === 'UNSATISFIABLE' && 'Вывод: UNSAT — коллизия невозможна'}
+                                        {a.result === 'TIMEOUT' && 'Вывод: не определено (таймаут)'}
+                                        {a.result === 'CANCELLED' && 'Вывод: прервано пользователем'}
+                                      </p>
+                                      {a.result === 'SATISFIABLE' && (
+                                        <p className="text-green-400/80">Решатель нашёл набор значений всех {(a.num_vars ?? 0).toLocaleString()} переменных, при котором все {(a.num_clauses ?? 0).toLocaleString()} дизъюнктов истинны одновременно. Это означает, что существуют два сообщения M1 и M2 с заданной XOR-разностью, дающие одинаковый хэш. Из присваивания извлечены конкретные значения M1 и M2.</p>
+                                      )}
+                                      {a.result === 'UNSATISFIABLE' && (
+                                        <p className="text-red-400/80">Решатель исчерпал всё пространство поиска и математически доказал, что не существует ни одного набора значений переменных, удовлетворяющего формуле. Через цепочку резолюций из {(a.num_conflicts ?? 0).toLocaleString()} конфликтов был выведен пустой дизъюнкт (⊥), что является формальным доказательством невыполнимости. Для данной разности ΔM коллизия при {a.num_vars ? Math.ceil((a.num_vars - 1024) / 2700) : '?'} раундах невозможна.</p>
+                                      )}
+                                      {a.result === 'TIMEOUT' && (
+                                        <p className="text-yellow-400/80">За отведённое время решатель обработал {(a.num_conflicts ?? 0).toLocaleString()} конфликтов, но не смог ни найти решение, ни доказать его отсутствие. Пространство поиска слишком велико для данного таймаута. Увеличение времени или уменьшение числа раундов может помочь.</p>
+                                      )}
+                                      {a.result === 'CANCELLED' && (
+                                        <p className="text-purple-400/80">Решение прервано. За {a.solve_time.toFixed(2)}с обработано {(a.num_conflicts ?? 0).toLocaleString()} конфликтов. Результат не определён.</p>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </details>
@@ -704,7 +772,7 @@ export default function ExperimentPage() {
                     {/* BarChart: статистика решателя */}
                     {solverChartData.length > 0 && (
                       <div className="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                        <p className="text-xs font-semibold text-slate-400 mb-3">Статистика SAT-решателя (последняя успешная попытка)</p>
+                        <p className="text-xs font-semibold text-slate-400 mb-3">Статистика SAT-решателя {solverStats ? '(успешная попытка)' : '(суммарно по всем попыткам)'}</p>
                         <div className="h-52">
                           <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={solverChartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>

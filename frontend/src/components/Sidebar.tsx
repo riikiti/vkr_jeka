@@ -1,9 +1,9 @@
 import { NavLink } from 'react-router-dom';
-import { Hash, FlaskConical, Cpu, Play, BarChart3, Settings, Layers, X } from 'lucide-react';
+import { Hash, FlaskConical, Cpu, Play, BarChart3, Layers, X } from 'lucide-react';
 import InfoModal from './InfoModal';
 import {
   sidebarDashboard, sidebarHash, sidebarDifferential, sidebarSAT,
-  sidebarExperiment, sidebarBatch, sidebarSettings,
+  sidebarExperiment, sidebarBatch,
 } from '../data/infoContent';
 
 const links = [
@@ -13,7 +13,6 @@ const links = [
   { to: '/sat', label: 'SAT-кодирование', icon: Cpu, info: sidebarSAT },
   { to: '/experiment', label: 'Эксперимент', icon: Play, info: sidebarExperiment },
   { to: '/batch', label: 'Батч / Grid Search', icon: Layers, info: sidebarBatch },
-  { to: '/settings', label: 'Настройки', icon: Settings, info: sidebarSettings },
 ];
 
 interface SidebarProps {
@@ -43,7 +42,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <div className="p-4 border-b border-slate-700 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-cyan-400">DiffSAT</h1>
-            <p className="text-xs text-slate-400 mt-1">Algorithm v0.2b</p>
+            <p className="text-xs text-slate-400 mt-1">Algorithm v0.3b</p>
           </div>
           <button
             onClick={onClose}

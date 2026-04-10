@@ -69,15 +69,6 @@ export const sidebarBatch = {
   ),
 };
 
-export const sidebarSettings = {
-  title: 'Настройки',
-  content: (
-    <>
-      <p>Системная информация о проекте: адреса бэкенда и фронтенда, ссылка на Swagger UI документацию API.</p>
-      <p>Справочные списки поддерживаемых SAT-решателей (CaDiCaL, Glucose, MiniSAT) и хэш-функций (SHA-256, SHA-1, MD5, MD4).</p>
-    </>
-  ),
-};
 
 // ─── Dashboard page sections ─────────────────────────────────────────────────
 

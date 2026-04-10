@@ -74,6 +74,7 @@ def iterative_attack(
     hash_function: str = "sha256",
     seed: int = 42,
     cancel_event=None,
+    progress_callback=None,
 ) -> AttackResult:
     """Run iterative combined attack.
 
@@ -130,6 +131,14 @@ def iterative_attack(
         logger.info(f"Iterative #{chars_tried}: {active_words} active words, "
                     f"HW={hw}, diff=[{', '.join(f'0x{d:08x}' for d in current_diff[:4])}...]")
 
+        if progress_callback:
+            progress_callback({
+                "stage": "encoding",
+                "attempt": chars_tried,
+                "total": max_characteristics,
+                "message": f"Итеративная: кодирование #{chars_tried} (HW={hw}, мутация)",
+            })
+
         # Encode and solve
         enc_start = time.time()
         encoder = CollisionEncoder(num_rounds, hash_function=hash_function)
@@ -147,6 +156,14 @@ def iterative_attack(
 
         cnf_vars = encoder.builder.num_vars
         cnf_clauses = encoder.builder.num_clauses
+
+        if progress_callback:
+            progress_callback({
+                "stage": "solving",
+                "attempt": chars_tried,
+                "total": max_characteristics,
+                "message": f"SAT-решение #{chars_tried}: {cnf_vars} перем., {cnf_clauses} дизъюнктов",
+            })
 
         solve_start = time.time()
         solve_seed = int(time.time() * 1000) ^ chars_tried

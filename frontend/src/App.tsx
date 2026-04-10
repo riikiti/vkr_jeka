@@ -7,7 +7,6 @@ import DifferentialPage from './pages/DifferentialPage';
 import SATPage from './pages/SATPage';
 import ExperimentPage from './pages/ExperimentPage';
 import BatchPage from './pages/BatchPage';
-import SettingsPage from './pages/SettingsPage';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -37,7 +36,6 @@ function App() {
             <Route path="/sat" element={<SATPage />} />
             <Route path="/experiment" element={<ExperimentPage />} />
             <Route path="/batch" element={<BatchPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </main>
       </div>

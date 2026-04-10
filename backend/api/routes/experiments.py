@@ -149,7 +149,8 @@ def _build_response(result, hash_func_name: str, config: dict) -> dict:
     return resp
 
 
-def _run_sync(config: dict, cancel_event: threading.Event | None = None) -> dict:
+def _run_sync(config: dict, cancel_event: threading.Event | None = None,
+              progress_dict: dict | None = None) -> dict:
     """Synchronous experiment runner — executes in thread pool."""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
@@ -157,6 +158,10 @@ def _run_sync(config: dict, cancel_event: threading.Event | None = None) -> dict
     strategy = config.get("combined_strategy", "sequential")
     hash_func_name = config.get("hash_function", "sha256")
     message_diffs = _parse_message_diffs(config)
+
+    def _progress_cb(info: dict) -> None:
+        if progress_dict is not None:
+            progress_dict.update(info)
 
     common_kwargs = dict(
         num_rounds=config["num_rounds"],
@@ -166,6 +171,7 @@ def _run_sync(config: dict, cancel_event: threading.Event | None = None) -> dict
         max_characteristics=config["max_characteristics"],
         hash_function=hash_func_name,
         cancel_event=cancel_event,
+        progress_callback=_progress_cb,
     )
 
     if method == "combined" and strategy == "sequential":
@@ -202,10 +208,11 @@ async def _execute_experiment(exp_id: str) -> None:
     _cancel_flags[exp_id] = cancel_event
 
     config = exp["config"]
+    exp["progress"] = {}
     hard_timeout = config.get("timeout", 300) * config.get("max_characteristics", 10) + 60
     try:
         result = await asyncio.wait_for(
-            loop.run_in_executor(_executor, _run_sync, config, cancel_event),
+            loop.run_in_executor(_executor, _run_sync, config, cancel_event, exp["progress"]),
             timeout=hard_timeout,
         )
         if cancel_event.is_set():
@@ -249,11 +256,12 @@ async def _execute_batch(batch_id: str, max_workers: int) -> None:
             _cancel_flags[exp_id] = cancel_event
 
             config = exp["config"]
+            exp["progress"] = {}
             hard_timeout = config.get("timeout", 300) * config.get("max_characteristics", 10) + 60
 
             try:
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, _run_sync, config, cancel_event),
+                    loop.run_in_executor(_executor, _run_sync, config, cancel_event, exp["progress"]),
                     timeout=hard_timeout,
                 )
                 if cancel_event.is_set():

@@ -57,6 +57,7 @@ def hybrid_attack(
     seed: int = 42,
     scan_samples: int = 4096,
     cancel_event=None,
+    progress_callback=None,
 ) -> AttackResult:
     """Run hybrid combined attack.
 
@@ -95,10 +96,25 @@ def hybrid_attack(
     logger.info(f"Hybrid phase 1: scanning {len(candidates)} differentials "
                 f"with {scan_samples} samples each")
 
+    if progress_callback:
+        progress_callback({
+            "stage": "monte_carlo",
+            "attempt": 0,
+            "total": len(candidates),
+            "message": f"Фаза 1: Монте-Карло сканирование {len(candidates)} разностей ({scan_samples} выборок)",
+        })
+
     diff_analysis_start = time.time()
     scored: list[tuple[float, list[int]]] = []
 
-    for diff in candidates:
+    for idx_scan, diff in enumerate(candidates):
+        if progress_callback and idx_scan % 5 == 0:
+            progress_callback({
+                "stage": "monte_carlo",
+                "attempt": idx_scan + 1,
+                "total": len(candidates),
+                "message": f"Фаза 1: оценка разности {idx_scan + 1}/{len(candidates)}",
+            })
         try:
             stats = estimate_characteristic_probability(
                 hash_cls, num_rounds, diff,
@@ -151,6 +167,14 @@ def hybrid_attack(
 
         cnf_vars = encoder.builder.num_vars
         cnf_clauses = encoder.builder.num_clauses
+
+        if progress_callback:
+            progress_callback({
+                "stage": "solving",
+                "attempt": chars_tried,
+                "total": min(len(scored), max_characteristics),
+                "message": f"Фаза 2: SAT-решение #{chars_tried} (score={score:.4f}, {cnf_vars} перем.)",
+            })
 
         solve_start = time.time()
         solve_seed = int(time.time() * 1000) ^ chars_tried

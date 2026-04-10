@@ -39,6 +39,13 @@ interface AttemptInfo {
   solve_time: number;
   encoding_time: number;
   hamming_weight: number;
+  num_vars?: number;
+  num_clauses?: number;
+  num_conflicts?: number;
+  num_decisions?: number;
+  num_propagations?: number;
+  num_restarts?: number;
+  num_learnt_clauses?: number;
 }
 
 interface ExperimentResults {
@@ -58,6 +65,13 @@ interface ExperimentResults {
   attempts?: AttemptInfo[] | null;
 }
 
+interface ProgressInfo {
+  stage?: string;
+  attempt?: number;
+  total?: number;
+  message?: string;
+}
+
 interface BatchExperiment {
   id: string;
   batch_id?: string;
@@ -70,6 +84,7 @@ interface BatchExperiment {
   };
   status: string;
   results?: ExperimentResults | null;
+  progress?: ProgressInfo;
   error?: string;
 }
 
@@ -149,13 +164,19 @@ const STATUS_COLORS: Record<string, string> = {
 
 const ATTEMPT_RESULT_STYLE: Record<string, string> = {
   SAT: 'bg-green-500/20 text-green-400',
+  SATISFIABLE: 'bg-green-500/20 text-green-400',
   UNSAT: 'bg-red-500/20 text-red-400',
+  UNSATISFIABLE: 'bg-red-500/20 text-red-400',
   TIMEOUT: 'bg-yellow-500/20 text-yellow-400',
+  CANCELLED: 'bg-purple-500/20 text-purple-400',
 };
 const ATTEMPT_RESULT_LABEL: Record<string, string> = {
   SAT: 'SAT (найдено)',
+  SATISFIABLE: 'SAT (найдено)',
   UNSAT: 'UNSAT (невозможно)',
+  UNSATISFIABLE: 'UNSAT (невозможно)',
   TIMEOUT: 'TIMEOUT',
+  CANCELLED: 'ОТМЕНЕНО',
 };
 
 function AttemptsLog({ attempts }: { attempts?: AttemptInfo[] | null }) {
@@ -163,44 +184,70 @@ function AttemptsLog({ attempts }: { attempts?: AttemptInfo[] | null }) {
   return (
     <div>
       <p className="text-slate-400 mb-1 font-semibold">Лог попыток ({attempts.length})</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-slate-500 border-b border-slate-700">
-              <th className="text-left pb-1 px-1.5">#</th>
-              <th className="text-left pb-1 px-1.5">Результат</th>
-              <th className="text-left pb-1 px-1.5">Время</th>
-              <th className="text-left pb-1 px-1.5">HW</th>
-              <th className="text-left pb-1 px-1.5">Активные слова</th>
-            </tr>
-          </thead>
-          <tbody>
-            {attempts.map((a, i) => {
-              const activeWords = a.diff
-                .map((w, idx) => ({ w, idx }))
-                .filter(x => x.w !== '0x00000000');
-              return (
-                <tr key={i} className="border-b border-slate-800/50">
-                  <td className="py-1 px-1.5 text-slate-500 font-mono">{i + 1}</td>
-                  <td className="py-1 px-1.5">
-                    <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${ATTEMPT_RESULT_STYLE[a.result] ?? 'text-slate-400'}`}>
-                      {ATTEMPT_RESULT_LABEL[a.result] ?? a.result}
-                    </span>
-                  </td>
-                  <td className="py-1 px-1.5 font-mono text-slate-300">{a.solve_time.toFixed(2)}с</td>
-                  <td className="py-1 px-1.5 font-mono text-slate-300">{a.hamming_weight}</td>
-                  <td className="py-1 px-1.5 font-mono text-slate-400">
-                    {activeWords.length === 0 ? '—' : activeWords.map(x => (
-                      <span key={x.idx} className="text-yellow-400 mr-1.5">
-                        W[{x.idx}]={x.w}
-                      </span>
-                    ))}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="space-y-2">
+        {attempts.map((a, i) => {
+          const activeWords = a.diff
+            .map((w, idx) => ({ w, idx }))
+            .filter(x => x.w !== '0x00000000');
+          const hasStats = !!(a.num_vars || a.num_conflicts || a.num_decisions);
+          return (
+            <div key={i} className="bg-slate-950 rounded-lg p-2.5 border border-slate-800">
+              {/* Header */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-slate-500 font-mono text-xs">#{i + 1}</span>
+                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${ATTEMPT_RESULT_STYLE[a.result] ?? 'text-slate-400'}`}>
+                  {ATTEMPT_RESULT_LABEL[a.result] ?? a.result}
+                </span>
+                <span className="text-xs text-slate-500">
+                  <span className="text-slate-300 font-mono">{a.solve_time.toFixed(2)}с</span>
+                </span>
+                <span className="text-xs text-slate-600">HW={a.hamming_weight}</span>
+                {activeWords.length > 0 && (
+                  <span className="text-xs font-mono text-yellow-400/70">
+                    {activeWords.map(x => `W[${x.idx}]`).join(', ')}
+                  </span>
+                )}
+              </div>
+              {/* Expandable details */}
+              {hasStats && (
+                <details className="mt-1.5">
+                  <summary className="text-[11px] text-blue-400 cursor-pointer hover:text-blue-300 select-none">
+                    Расширенная информация (SAT-решатель)
+                  </summary>
+                  <div className="mt-1.5 space-y-1.5 text-[11px]">
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                      <div><span className="text-slate-500">Перем.:</span> <span className="text-slate-300 font-mono">{(a.num_vars ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-slate-500">Дизъюнкт.:</span> <span className="text-slate-300 font-mono">{(a.num_clauses ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-slate-500">Конфликты:</span> <span className="text-yellow-300 font-mono">{(a.num_conflicts ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-slate-500">Решения:</span> <span className="text-slate-300 font-mono">{(a.num_decisions ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-slate-500">Распр-ия:</span> <span className="text-slate-300 font-mono">{(a.num_propagations ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-slate-500">Рестарты:</span> <span className="text-slate-300 font-mono">{(a.num_restarts ?? 0).toLocaleString()}</span></div>
+                    </div>
+                    <div className={`rounded p-2 ${
+                      a.result === 'SATISFIABLE' ? 'bg-green-500/10 border border-green-500/20' :
+                      a.result === 'UNSATISFIABLE' ? 'bg-red-500/10 border border-red-500/20' :
+                      a.result === 'TIMEOUT' ? 'bg-yellow-500/10 border border-yellow-500/20' :
+                      'bg-slate-800 border border-slate-700'
+                    }`}>
+                      {a.result === 'SATISFIABLE' && (
+                        <p className="text-green-400/80">Найден набор значений {(a.num_vars ?? 0).toLocaleString()} переменных, удовлетворяющий всем дизъюнктам → коллизия существует.</p>
+                      )}
+                      {a.result === 'UNSATISFIABLE' && (
+                        <p className="text-red-400/80">Через {(a.num_conflicts ?? 0).toLocaleString()} конфликтов выведен пустой дизъюнкт (⊥) — формальное доказательство, что коллизия с данной ΔM невозможна.</p>
+                      )}
+                      {a.result === 'TIMEOUT' && (
+                        <p className="text-yellow-400/80">За отведённое время обработано {(a.num_conflicts ?? 0).toLocaleString()} конфликтов, но результат не определён.</p>
+                      )}
+                      {a.result === 'CANCELLED' && (
+                        <p className="text-purple-400/80">Прервано. Обработано {(a.num_conflicts ?? 0).toLocaleString()} конфликтов.</p>
+                      )}
+                    </div>
+                  </div>
+                </details>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -767,6 +814,30 @@ export default function BatchPage() {
             </div>
           </div>
 
+          {/* Live running experiments info */}
+          {batch.running > 0 && (() => {
+            const runningExps = experiments.filter(e => e.status === 'running' && e.progress?.message);
+            if (runningExps.length === 0) return null;
+            return (
+              <div className="bg-slate-900/50 rounded-lg p-3 border border-cyan-500/20 space-y-1.5">
+                <p className="text-xs text-cyan-400 font-semibold">Сейчас выполняется ({batch.running}):</p>
+                {runningExps.slice(0, 5).map(exp => (
+                  <div key={exp.id} className="flex items-center gap-2 text-xs">
+                    <div className="w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span className="text-slate-500 font-mono shrink-0">{exp.config.hash_function.toUpperCase().replace('SHA256','SHA-256')} {exp.config.num_rounds}r</span>
+                    <span className="text-slate-400 truncate">{exp.progress?.message}</span>
+                    {exp.progress?.attempt != null && exp.progress?.total != null && (
+                      <span className="text-slate-600 font-mono shrink-0">[{exp.progress.attempt}/{exp.progress.total}]</span>
+                    )}
+                  </div>
+                ))}
+                {runningExps.length > 5 && (
+                  <p className="text-[10px] text-slate-600">...и ещё {runningExps.length - 5}</p>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Progress bar */}
           <div>
             <div className="flex justify-between text-xs text-slate-400 mb-1">
@@ -883,7 +954,7 @@ export default function BatchPage() {
                     {filteredExps.map(exp => {
                       const r = exp.results;
                       const isExpanded = expandedId === exp.id;
-                      const hasDetails = r != null && (r.success || r.solver_stats);
+                      const hasDetails = r != null && (r.success || r.solver_stats || (r.attempts && r.attempts.length > 0));
                       return (
                         <tr
                           key={exp.id}
@@ -902,6 +973,11 @@ export default function BatchPage() {
                             <span className={`px-1.5 py-0.5 rounded text-xs ${STATUS_COLORS[exp.status] ?? 'text-slate-400'}`}>
                               {exp.status}
                             </span>
+                            {exp.status === 'running' && exp.progress?.message && (
+                              <span className="block text-[10px] text-cyan-400/70 mt-0.5 truncate max-w-[200px]" title={exp.progress.message}>
+                                {exp.progress.message}
+                              </span>
+                            )}
                           </td>
                           <td className="px-3 py-1.5">
                             {r != null ? (
