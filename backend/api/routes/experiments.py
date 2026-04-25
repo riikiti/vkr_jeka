@@ -176,7 +176,7 @@ def _run_sync(config: dict, cancel_event: threading.Event | None = None,
 
     if method == "combined" and strategy == "sequential":
         from src.combined.sequential import sequential_attack
-        result = sequential_attack(**common_kwargs)
+        result = sequential_attack(**common_kwargs, seed=config.get("seed", 42))
 
     elif method == "combined" and strategy == "iterative":
         from src.combined.iterative import iterative_attack
@@ -186,9 +186,61 @@ def _run_sync(config: dict, cancel_event: threading.Event | None = None,
         from src.combined.hybrid import hybrid_attack
         result = hybrid_attack(**common_kwargs, seed=config.get("seed", 42))
 
+    elif method == "combined" and strategy == "incremental":
+        from src.combined.sequential import sequential_attack_incremental
+        result = sequential_attack_incremental(**common_kwargs, seed=config.get("seed", 42))
+
     elif method == "pure_sat":
-        from src.combined.sequential import sequential_attack
-        result = sequential_attack(**common_kwargs)
+        # Baseline: no differential constraint — solver searches full collision space
+        from src.sat_encoding.hash_encoder import CollisionEncoder
+        from src.combined.sequential import AttackResult, AttemptInfo
+        from src.solver.pysat_runner import PySATRunner
+        from src.solver.solution_extractor import SolutionExtractor
+        import tempfile, os as _os
+
+        enc = CollisionEncoder(config["num_rounds"], hash_function=hash_func_name)
+        enc.encode()
+        msg_var_ids = (
+            [v for word in enc._msg1 for v in word]
+            + [v for word in enc._msg2 for v in word]
+        )
+        fd, cnf_file = tempfile.mkstemp(suffix=".cnf", prefix="pure_sat_")
+        _os.close(fd)
+        enc.builder.write_dimacs(cnf_file)
+        runner = PySATRunner(config["solver"])
+        import time as _time
+        t0 = _time.time()
+        output = runner.solve(cnf_file, timeout=config["timeout"],
+                              random_phase_vars=msg_var_ids, seed=config.get("seed", 42),
+                              cancel_event=cancel_event)
+        elapsed = _time.time() - t0
+        try:
+            _os.unlink(cnf_file)
+        except OSError:
+            pass
+        ar = AttackResult()
+        ar.characteristics_tried = 1
+        ar.total_time = elapsed
+        if output.result.value == "SATISFIABLE" and output.assignment:
+            extractor = SolutionExtractor(enc.builder.var_mgr)
+            m1 = extractor.extract_message(output.assignment, enc._msg1)
+            m2 = extractor.extract_message(output.assignment, enc._msg2)
+            ar.success = (m1 != m2)
+            ar.m1_words = m1
+            ar.m2_words = m2
+            ar.solver_output = output
+        ar.attempts.append(AttemptInfo(
+            diff=[0] * 16,
+            result=output.result.value,
+            solve_time=elapsed,
+            num_vars=enc.builder.num_vars,
+            num_clauses=enc.builder.num_clauses,
+            num_conflicts=output.stats.num_conflicts,
+            num_decisions=output.stats.num_decisions,
+            num_propagations=output.stats.num_propagations,
+            num_restarts=output.stats.num_restarts,
+        ))
+        result = ar
 
     else:
         return {"success": False, "total_time": 0, "characteristics_tried": 0,

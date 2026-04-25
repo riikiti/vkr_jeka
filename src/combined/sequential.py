@@ -124,6 +124,7 @@ def sequential_attack(
     timeout_per_char: int = 300,
     max_characteristics: int = 10,
     hash_function: str = "sha256",
+    seed: int = 42,
     cancel_event=None,
     progress_callback=None,
 ) -> AttackResult:
@@ -150,7 +151,7 @@ def sequential_attack(
     result = AttackResult()
 
     if message_diffs is None:
-        message_diffs = generate_message_diffs(max_characteristics)
+        message_diffs = generate_message_diffs(max_characteristics, seed=seed)
 
     solver = PySATRunner(solver_name)
     chars_tried = 0
@@ -205,7 +206,9 @@ def sequential_attack(
             })
 
         solve_start = time.time()
-        solve_seed = int(time.time() * 1000) ^ chars_tried
+        # Deterministic seed per attempt: same seed → same random phases
+        # across all strategies for a fair comparison.
+        solve_seed = seed * 100003 + chars_tried
         output = solver.solve(cnf_file, timeout=timeout_per_char,
                               random_phase_vars=msg_var_ids, seed=solve_seed,
                               cancel_event=cancel_event)
@@ -266,6 +269,131 @@ def sequential_attack(
             result.characteristics_tried = chars_tried
             result.total_time = time.time() - total_start
             return result
+
+    result.characteristics_tried = chars_tried
+    result.total_time = time.time() - total_start
+    return result
+
+
+def sequential_attack_incremental(
+    num_rounds: int,
+    message_diffs: list[list[int]] | None = None,
+    solver_name: str = "cadical153",
+    timeout_per_char: int = 300,
+    max_characteristics: int = 10,
+    hash_function: str = "sha256",
+    seed: int = 42,
+    cancel_event=None,
+    progress_callback=None,
+) -> AttackResult:
+    """Sequential attack with incremental SAT: one solver instance, learned clauses persist.
+
+    Differential constraints for each candidate are encoded using activation literals
+    so the solver accumulates knowledge across all attempts instead of restarting.
+    """
+    from ..solver.pysat_runner import IncrementalPySATRunner
+
+    total_start = time.time()
+    result = AttackResult()
+
+    if message_diffs is None:
+        message_diffs = generate_message_diffs(max_characteristics, seed=seed)
+
+    # Build base CNF once (hash1, hash2, output equality, M!=M')
+    enc_start = time.time()
+    encoder = CollisionEncoder(num_rounds, hash_function=hash_function)
+    encoder.encode()
+    base_clauses = list(encoder.builder.clauses)
+    base_enc_time = time.time() - enc_start
+
+    msg_var_ids = (
+        [v for word in encoder._msg1 for v in word]
+        + [v for word in encoder._msg2 for v in word]
+    )
+
+    logger.info(
+        f"[incremental] base CNF: {encoder.builder.num_vars} vars, "
+        f"{encoder.builder.num_clauses} clauses, built in {base_enc_time:.2f}s"
+    )
+
+    chars_tried = 0
+
+    with IncrementalPySATRunner(solver_name, base_clauses) as runner:
+        for diff in message_diffs[:max_characteristics]:
+            if cancel_event is not None and cancel_event.is_set():
+                logger.info("Cancelled by user")
+                break
+
+            chars_tried += 1
+            hw = sum(bin(w & 0xFFFFFFFF).count('1') for w in diff)
+            logger.info(
+                f"[incremental] attempt #{chars_tried} (HW={hw}): "
+                f"[{', '.join(f'0x{d:08x}' for d in diff[:4])}...]"
+            )
+
+            if progress_callback:
+                progress_callback({
+                    "stage": "solving",
+                    "attempt": chars_tried,
+                    "total": min(len(message_diffs), max_characteristics),
+                    "message": (
+                        f"Инкрементальный SAT #{chars_tried} (HW={hw})"
+                    ),
+                })
+
+            # Get differential clauses and register them with a fresh activation var
+            diff_clauses = encoder.get_diff_clauses(diff)
+            act_var = runner.new_activation_var()
+            runner.add_activation_clauses(act_var, diff_clauses)
+
+            solve_seed = seed * 100003 + chars_tried
+            output = runner.solve(
+                assumptions=[act_var],
+                timeout=timeout_per_char,
+                random_phase_vars=msg_var_ids,
+                seed=solve_seed,
+                cancel_event=cancel_event,
+            )
+
+            logger.info(
+                f"[incremental] #{chars_tried}: {output.result.value} "
+                f"in {output.stats.solve_time:.2f}s, "
+                f"conflicts={output.stats.num_conflicts}"
+            )
+
+            attempt = AttemptInfo(
+                diff=list(diff),
+                result=output.result.value,
+                solve_time=output.stats.solve_time,
+                encoding_time=base_enc_time if chars_tried == 1 else 0.0,
+                num_vars=encoder.builder.num_vars,
+                num_clauses=encoder.builder.num_clauses,
+                num_conflicts=output.stats.num_conflicts,
+                num_decisions=output.stats.num_decisions,
+                num_propagations=output.stats.num_propagations,
+                num_restarts=output.stats.num_restarts,
+                num_learnt_clauses=output.stats.num_learnt_clauses,
+            )
+            result.attempts.append(attempt)
+
+            if output.result == SATResult.CANCELLED:
+                logger.info("Solver cancelled")
+                break
+
+            if output.result == SATResult.SAT:
+                extractor = SolutionExtractor(encoder.builder.var_mgr)
+                m1 = extractor.extract_message(output.assignment, encoder._msg1)
+                m2 = extractor.extract_message(output.assignment, encoder._msg2)
+
+                result.success = True
+                result.m1_words = m1
+                result.m2_words = m2
+                result.solver_output = output
+                result.encoding_time = base_enc_time
+                result.solving_time = output.stats.solve_time
+                result.characteristics_tried = chars_tried
+                result.total_time = time.time() - total_start
+                return result
 
     result.characteristics_tried = chars_tried
     result.total_time = time.time() - total_start

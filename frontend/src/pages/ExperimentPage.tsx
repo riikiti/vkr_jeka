@@ -26,9 +26,10 @@ const SOLVER_LABELS: Record<string, string> = {
 };
 
 const STRATEGY_LABELS: Record<string, string> = {
-  sequential: 'Последовательная',
-  iterative: 'Итеративная (с мутациями)',
-  hybrid: 'Гибридная (Монте-Карло + SAT)',
+  sequential:  'Последовательная',
+  iterative:   'Итеративная (с мутациями)',
+  hybrid:      'Гибридная (Монте-Карло + SAT)',
+  incremental: 'Инкрементальная (накопление learned clauses)',
 };
 
 const METHOD_LABELS: Record<string, string> = {
@@ -307,6 +308,7 @@ export default function ExperimentPage() {
                 <option value="sequential">Последовательная</option>
                 <option value="iterative">Итеративная</option>
                 <option value="hybrid">Гибридная</option>
+                <option value="incremental">Инкрементальная</option>
               </select>
             </div>
           )}

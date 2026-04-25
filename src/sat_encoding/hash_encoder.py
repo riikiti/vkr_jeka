@@ -223,3 +223,25 @@ class CollisionEncoder:
                 else:
                     encode_equal(self.builder,
                                  self._msg1[w][bit], self._msg2[w][bit])
+
+    def get_diff_clauses(self, delta_m: list[int]) -> list[list[int]]:
+        """Return CNF clauses encoding the message difference without modifying the builder.
+
+        Suitable for incremental SAT: pass these to IncrementalPySATRunner along
+        with an activation literal, so learned clauses persist across attempts.
+
+        encode_equal(a, b)     → [a, -b], [-a,  b]
+        encode_not_equal(a, b) → [a,  b], [-a, -b]
+        """
+        clauses: list[list[int]] = []
+        for w in range(16):
+            for bit in range(32):
+                a = self._msg1[w][bit]
+                b = self._msg2[w][bit]
+                if (delta_m[w] >> bit) & 1:
+                    clauses.append([a, b])
+                    clauses.append([-a, -b])
+                else:
+                    clauses.append([a, -b])
+                    clauses.append([-a, b])
+        return clauses

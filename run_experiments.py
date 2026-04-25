@@ -15,10 +15,14 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src.sat_encoding.hash_encoder import CollisionEncoder
-from src.combined.sequential import sequential_attack, generate_message_diffs
+from src.combined.sequential import (
+    sequential_attack, sequential_attack_incremental, generate_message_diffs,
+    AttackResult, AttemptInfo,
+)
 from src.combined.iterative import iterative_attack
 from src.combined.hybrid import hybrid_attack
 from src.solver.pysat_runner import PySATRunner
+from src.solver.solution_extractor import SolutionExtractor
 from src.hash_functions.sha256 import SHA256Reduced
 from src.hash_functions.md5 import MD5Reduced
 from src.hash_functions.md4 import MD4Reduced
@@ -27,20 +31,98 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
 
+# Number of independent runs per (hash, rounds, strategy) for median reporting
+N_RUNS = 5
+
 results = {
     "metadata": {
         "date": time.strftime("%Y-%m-%d %H:%M:%S"),
         "description": "Chapter 4 experimental results for dissertation",
+        "n_runs": N_RUNS,
     },
     "experiment1_complexity": [],
     "experiment2_solver_comparison": [],
     "experiment3_strategy_comparison": [],
     "experiment4_collisions": [],
+    "experiment5_incremental_vs_baseline": [],
 }
 
 
 def words_to_hex(words):
     return [f"0x{w & 0xFFFFFFFF:08x}" for w in words]
+
+
+def median_time(times: list[float]) -> float:
+    s = sorted(t for t in times if t is not None)
+    if not s:
+        return 0.0
+    mid = len(s) // 2
+    return s[mid] if len(s) % 2 else (s[mid - 1] + s[mid]) / 2
+
+
+def pure_sat_attack(
+    num_rounds: int,
+    solver_name: str = "cadical153",
+    timeout_per_char: int = 300,
+    hash_function: str = "sha256",
+) -> AttackResult:
+    """Baseline: SAT without any differential constraint (Φ_hash1 ∧ Φ_hash2 ∧ Φ_equal ∧ Φ_diff only).
+
+    Lets the solver search the full space of collisions without fixing which bits differ.
+    Used to measure the contribution of the differential stage.
+    """
+    import tempfile
+
+    enc = CollisionEncoder(num_rounds, hash_function=hash_function)
+    enc.encode()
+    # No fix_message_difference — no Φ_dc constraint
+
+    msg_var_ids = (
+        [v for word in enc._msg1 for v in word]
+        + [v for word in enc._msg2 for v in word]
+    )
+
+    fd, cnf_file = tempfile.mkstemp(suffix='.cnf', prefix='pure_sat_')
+    os.close(fd)
+    enc.builder.write_dimacs(cnf_file)
+
+    runner = PySATRunner(solver_name)
+    solve_seed = int(time.time() * 1000)
+    t0 = time.time()
+    output = runner.solve(cnf_file, timeout=timeout_per_char,
+                          random_phase_vars=msg_var_ids, seed=solve_seed)
+    elapsed = time.time() - t0
+
+    try:
+        os.unlink(cnf_file)
+    except OSError:
+        pass
+
+    ar = AttackResult()
+    ar.characteristics_tried = 1
+    ar.total_time = elapsed
+
+    if output.result.value == "SATISFIABLE" and output.assignment:
+        extractor = SolutionExtractor(enc.builder.var_mgr)
+        m1 = extractor.extract_message(output.assignment, enc._msg1)
+        m2 = extractor.extract_message(output.assignment, enc._msg2)
+        ar.success = (m1 != m2)
+        ar.m1_words = m1
+        ar.m2_words = m2
+        ar.solver_output = output
+
+    ar.attempts.append(AttemptInfo(
+        diff=[0] * 16,
+        result=output.result.value,
+        solve_time=elapsed,
+        num_vars=enc.builder.num_vars,
+        num_clauses=enc.builder.num_clauses,
+        num_conflicts=output.stats.num_conflicts,
+        num_decisions=output.stats.num_decisions,
+        num_propagations=output.stats.num_propagations,
+        num_restarts=output.stats.num_restarts,
+    ))
+    return ar
 
 
 def compute_hash_hex(hash_cls, num_rounds, m_words, big_endian=True):
@@ -219,11 +301,11 @@ def run_experiment2():
 
 
 # ============================================================
-# EXPERIMENT 3: Strategy Comparison
+# EXPERIMENT 3: Strategy Comparison (N_RUNS repeats → median time)
 # ============================================================
 def run_experiment3():
     print("\n" + "="*70)
-    print("EXPERIMENT 3: Strategy Comparison")
+    print(f"EXPERIMENT 3: Strategy Comparison ({N_RUNS} runs each, median reported)")
     print("="*70)
 
     configs = [
@@ -232,9 +314,10 @@ def run_experiment3():
     ]
 
     strategies = {
-        "sequential": sequential_attack,
-        "iterative": iterative_attack,
-        "hybrid": hybrid_attack,
+        "sequential":  sequential_attack,
+        "iterative":   iterative_attack,
+        "hybrid":      hybrid_attack,
+        "incremental": sequential_attack_incremental,
     }
 
     for hash_name, round_list in configs:
@@ -242,43 +325,49 @@ def run_experiment3():
             for strat_name, strat_func in strategies.items():
                 print(f"\n--- {hash_name.upper()} {num_rounds}R, strategy={strat_name} ---")
 
-                try:
-                    t0 = time.time()
-                    ar = strat_func(
-                        num_rounds=num_rounds,
-                        solver_name="cadical153",
-                        timeout_per_char=60,
-                        max_characteristics=16,
-                        hash_function=hash_name,
-                    )
-                    total_time = time.time() - t0
+                run_times: list[float] = []
+                run_successes: list[bool] = []
+                attempts_list: list[int] = []
 
-                    entry = {
-                        "hash_function": hash_name,
-                        "rounds": num_rounds,
-                        "strategy": strat_name,
-                        "success": ar.success,
-                        "time": round(total_time, 4),
-                        "attempts_count": ar.characteristics_tried,
-                    }
+                for run_idx in range(N_RUNS):
+                    try:
+                        t0 = time.time()
+                        ar = strat_func(
+                            num_rounds=num_rounds,
+                            solver_name="cadical153",
+                            timeout_per_char=60,
+                            max_characteristics=16,
+                            hash_function=hash_name,
+                        )
+                        elapsed = time.time() - t0
+                        run_times.append(round(elapsed, 4))
+                        run_successes.append(ar.success)
+                        attempts_list.append(ar.characteristics_tried)
+                        status = "OK" if ar.success else "FAIL"
+                        print(f"  run {run_idx+1}/{N_RUNS}: {status} {elapsed:.2f}s "
+                              f"({ar.characteristics_tried} attempts)")
+                    except Exception as e:
+                        print(f"  run {run_idx+1}/{N_RUNS}: ERROR — {e}")
+                        traceback.print_exc()
+                        run_times.append(None)
+                        run_successes.append(False)
+                        attempts_list.append(0)
 
-                    if ar.success:
-                        print(f"  SUCCESS in {total_time:.2f}s ({ar.characteristics_tried} attempts)")
-                    else:
-                        print(f"  FAILED in {total_time:.2f}s ({ar.characteristics_tried} attempts)")
+                med = median_time([t for t in run_times if t is not None])
+                success_rate = sum(run_successes) / N_RUNS
+                print(f"  → median={med:.2f}s  success_rate={success_rate:.0%}")
 
-                    results["experiment3_strategy_comparison"].append(entry)
-
-                except Exception as e:
-                    print(f"  Error: {e}")
-                    traceback.print_exc()
-                    results["experiment3_strategy_comparison"].append({
-                        "hash_function": hash_name,
-                        "rounds": num_rounds,
-                        "strategy": strat_name,
-                        "success": False,
-                        "error": str(e),
-                    })
+                results["experiment3_strategy_comparison"].append({
+                    "hash_function": hash_name,
+                    "rounds": num_rounds,
+                    "strategy": strat_name,
+                    "n_runs": N_RUNS,
+                    "run_times": run_times,
+                    "run_successes": run_successes,
+                    "run_attempts": attempts_list,
+                    "median_time": round(med, 4),
+                    "success_rate": round(success_rate, 3),
+                })
 
 
 # ============================================================
@@ -380,6 +469,85 @@ def run_experiment4():
 
 
 # ============================================================
+# EXPERIMENT 5: Incremental SAT vs Baseline (pure SAT, no differential)
+# ============================================================
+def run_experiment5():
+    """Compare three modes on small rounds with N_RUNS repetitions:
+       - pure_sat:    no differential constraint at all
+       - sequential:  differential constraint, fresh solver each attempt
+       - incremental: differential constraint, solver state preserved
+    """
+    print("\n" + "="*70)
+    print(f"EXPERIMENT 5: Incremental vs Baseline ({N_RUNS} runs each)")
+    print("="*70)
+
+    configs = [
+        ("sha256", list(range(1, 5))),   # SHA-256: 1-4 rounds
+        ("md5",    list(range(1, 6))),    # MD5: 1-5 rounds
+        ("md4",    list(range(1, 6))),    # MD4: 1-5 rounds
+    ]
+
+    for hash_name, round_list in configs:
+        for num_rounds in round_list:
+            print(f"\n=== {hash_name.upper()} {num_rounds} rounds ===")
+
+            for mode in ("pure_sat", "sequential", "incremental"):
+                run_times: list[float] = []
+                run_successes: list[bool] = []
+
+                for run_idx in range(N_RUNS):
+                    try:
+                        t0 = time.time()
+                        if mode == "pure_sat":
+                            ar = pure_sat_attack(
+                                num_rounds=num_rounds,
+                                solver_name="cadical153",
+                                timeout_per_char=120,
+                                hash_function=hash_name,
+                            )
+                        elif mode == "sequential":
+                            ar = sequential_attack(
+                                num_rounds=num_rounds,
+                                solver_name="cadical153",
+                                timeout_per_char=60,
+                                max_characteristics=16,
+                                hash_function=hash_name,
+                            )
+                        else:  # incremental
+                            ar = sequential_attack_incremental(
+                                num_rounds=num_rounds,
+                                solver_name="cadical153",
+                                timeout_per_char=60,
+                                max_characteristics=16,
+                                hash_function=hash_name,
+                            )
+                        elapsed = time.time() - t0
+                        run_times.append(round(elapsed, 4))
+                        run_successes.append(ar.success)
+                    except Exception as e:
+                        print(f"  [{mode}] run {run_idx+1} ERROR: {e}")
+                        traceback.print_exc()
+                        run_times.append(None)
+                        run_successes.append(False)
+
+                med = median_time([t for t in run_times if t is not None])
+                success_rate = sum(run_successes) / N_RUNS
+                print(f"  {mode:12s}: median={med:.3f}s  "
+                      f"success={success_rate:.0%}  runs={run_times}")
+
+                results["experiment5_incremental_vs_baseline"].append({
+                    "hash_function": hash_name,
+                    "rounds": num_rounds,
+                    "mode": mode,
+                    "n_runs": N_RUNS,
+                    "run_times": run_times,
+                    "run_successes": run_successes,
+                    "median_time": round(med, 4),
+                    "success_rate": round(success_rate, 3),
+                })
+
+
+# ============================================================
 # MAIN
 # ============================================================
 if __name__ == "__main__":
@@ -392,6 +560,7 @@ if __name__ == "__main__":
     run_experiment2()
     run_experiment3()
     run_experiment4()
+    run_experiment5()
 
     results["metadata"]["total_runtime"] = round(time.time() - overall_start, 2)
 
